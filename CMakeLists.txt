@@ -10,8 +10,6 @@ option(JFC_BUILD_DEMO "Build the demos" ON)
 option(JFC_BUILD_DOCS "Build documentation" OFF)
 option(JFC_BUILD_TESTS "Build unit tests" OFF)
 
-add_subdirectory(extern)
-
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
@@ -51,7 +49,7 @@ jfc_project(library
 )
 
 if (JFC_BUILD_DEMO)
-    add_subdirectory(demo)
+#    add_subdirectory(demo)
 endif()
 
 if (JFC_BUILD_TESTS)

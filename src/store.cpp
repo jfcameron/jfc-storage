@@ -1,7 +1,9 @@
 // © Joseph Cameron - All Rights Reserved
 
-#include <gdktestgame/buildinfo.h> //TODO: this will have to change when storage is refactored to its own repo
-#include <jfc/storage.h>
+#include <jfcstorage/buildinfo.h> 
+
+#include <jfc/storage/exception.h>
+#include <jfc/storage/store.h>
 
 #include <fstream>
 
