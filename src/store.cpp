@@ -70,8 +70,7 @@ std::optional<std::vector<std::byte>> store::load_file(std::string_view aPath) c
 
     file.seekg(0, std::ios::beg);
 
-    if (!file.read(
-        reinterpret_cast<char *>(contents.data()),
+    if (!file.read(reinterpret_cast<char *>(contents.data()),
         static_cast<std::streamsize>(contents.size())))
         return std::nullopt;
 
@@ -117,18 +116,11 @@ std::optional<std::filesystem::path> store::resolve_path(std::string_view aPath)
 void store::remove_file(std::string_view aPath)
 {
     const auto path = resolve_path(aPath);
-
-    if (!path)
-        throw jfc::storage::exception(
-            "path escapes storage root");
+    if (!path) throw jfc::storage::exception("path escapes storage root");
 
     std::error_code error;
-
     std::filesystem::remove(*path, error);
-
-    if (error)
-        throw jfc::storage::exception(
-            "failed to remove file");
+    if (error) throw jfc::storage::exception("failed to remove file");
 }
 
 void store::move_file(std::string_view aOldPath, std::string_view aNewPath) {
@@ -139,8 +131,6 @@ void store::move_file(std::string_view aOldPath, std::string_view aNewPath) {
     if (!newPath) throw jfc::storage::exception("destination path escapes storage root");
 
     std::error_code error;
-
     std::filesystem::rename(*oldPath, *newPath, error);
-
     if (error) throw jfc::storage::exception("failed to move file");
 }
