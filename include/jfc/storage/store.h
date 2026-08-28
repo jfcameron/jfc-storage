@@ -16,6 +16,8 @@ namespace jfc::storage {
         std::filesystem::path mRoot;
 
         std::optional<std::filesystem::path> resolve_path(std::string_view aPath) const;
+
+        store() = default;
     public:
         /// @brief loads file contents to memory
         /// @param aPath path to the file
@@ -36,7 +38,14 @@ namespace jfc::storage {
         /// @param aNewPath new path of the file
         void move_file(std::string_view aOldPath, std::string_view aNewPath);
 
+        /// @brief constructs storage, the root directory is set to a directory named 
+        /// aProgramName in an OS specific application data directory
+        /// @param aProgramName 
         store(std::string_view aProgramName);
+
+        /// @brief constructs storage with a user-defined root directory
+        /// @param aRoot path to the root directory
+        static store make_from_root(std::filesystem::path aRoot);
     };
 }
 

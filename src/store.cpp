@@ -49,9 +49,15 @@ namespace {
 #endif
 }
 
-store::store (std::string_view aProgramName) 
+store::store(std::string_view aProgramName) 
 : mRoot(get_path(aProgramName))
 {}
+
+store store::make_from_root(std::filesystem::path aRoot) {
+    store newStore;
+    newStore.mRoot = aRoot;
+    return newStore;
+}
 
 std::optional<std::vector<std::byte>> store::load_file(std::string_view aPath) const {
     const auto path = resolve_path(aPath);
