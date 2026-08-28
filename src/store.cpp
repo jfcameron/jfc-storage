@@ -93,13 +93,30 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
         if (error) throw jfc::storage::exception("failed to create storage directory");
     }
 
-    std::ofstream file( *path, std::ios::binary | std::ios::trunc);
-    if (!file) throw jfc::storage::exception("failed to open file for writing");
+    const auto temporaryPath = *path;
+    temporaryPath += ".tmp";
 
-    file.write(reinterpret_cast<const char *>(aData.data()),
-        static_cast<std::streamsize>(aData.size()));
+    {
+        std::ofstream file(
+            temporaryPath,
+            std::ios::binary | std::ios::trunc);
 
-    if (!file) throw jfc::storage::exception("failed to write file");
+        if (!file)
+            throw jfc::storage::exception("failed to open temporary file for writing");
+
+        file.write(
+            reinterpret_cast<const char *>(aData.data()),
+            static_cast<std::streamsize>(aData.size()));
+
+        if (!file)
+            throw jfc::storage::exception("failed to write temporary file");
+    }
+
+    std::error_code error;
+
+    std::filesystem::rename(temporaryPath, *path, error);
+
+    if (error) throw jfc::storage::exception( "failed to replace file");
 }
 
 std::optional<std::filesystem::path> store::resolve_path(std::string_view aPath) const {

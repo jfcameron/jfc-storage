@@ -24,7 +24,7 @@ namespace jfc::storage {
         /// @return contents
         std::optional<std::vector<std::byte>> load_file(std::string_view aPath) const;
 
-        /// @brief saves data to file 
+        /// @brief saves data to temporary file then swaps it with the file at aPath
         /// @param aPath path to the file
         /// @param aData data
         void save_file(std::string_view aPath, std::span<const std::byte> aData);
