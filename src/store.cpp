@@ -93,7 +93,7 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
         if (error) throw jfc::storage::exception("failed to create storage directory");
     }
 
-    const auto temporaryPath = *path;
+    auto temporaryPath = *path;
     temporaryPath += ".tmp";
 
     {
@@ -113,9 +113,7 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
     }
 
     std::error_code error;
-
     std::filesystem::rename(temporaryPath, *path, error);
-
     if (error) throw jfc::storage::exception( "failed to replace file");
 }
 
