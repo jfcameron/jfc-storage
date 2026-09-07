@@ -15,6 +15,8 @@ namespace jfc::storage {
     class store final {
         std::filesystem::path mRoot;
 
+        bool mRestrictToOwner = false;
+
         std::optional<std::filesystem::path> resolve_path(std::string_view aPath) const;
 
         store() = default;
@@ -46,6 +48,10 @@ namespace jfc::storage {
         /// @brief constructs storage with a user-defined root directory
         /// @param aRoot path to the root directory
         static store make_from_root(std::filesystem::path aRoot);
+
+        /// @brief a store rooted in this user's *configuration* directory
+        /// @param aProgramName the directory name, conventionally the program's
+        static store make_config(std::string_view aProgramName);
     };
 }
 

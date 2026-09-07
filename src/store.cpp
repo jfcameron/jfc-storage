@@ -7,36 +7,51 @@
 
 #include <fstream>
 
+#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
+#include <pwd.h>
+#include <unistd.h>
+#endif
+
 using namespace jfc::storage;
 
 namespace {
+#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
+    std::filesystem::path home_directory() {
+        const char *home = std::getenv("HOME");
+        if (home && *home) return std::filesystem::path(home);
+
+        if (const passwd *const entry = ::getpwuid(::getuid());
+            entry && entry->pw_dir && *entry->pw_dir)
+            return std::filesystem::path(entry->pw_dir);
+
+        throw jfc::storage::exception(
+            "cannot locate a home directory: HOME is unset and this user has none on record");
+    }
+#endif
+
 #ifdef JFC_TARGET_PLATFORM_Linux 
     std::filesystem::path get_path(std::string_view aProgramName) {
         const char *dataHome = std::getenv("XDG_DATA_HOME");
         if (dataHome && *dataHome)
             return std::filesystem::path(dataHome) / aProgramName;
 
-        const char *home = std::getenv("HOME");
-        if (!home) throw jfc::storage::exception("HOME not found in environment");
+        return home_directory() / ".local" / "share" / aProgramName;
+    }
 
-        std::filesystem::path root = std::filesystem::path(home) 
-            / ".local"
-            / "share"
-            / aProgramName;
+    std::filesystem::path get_config_path(std::string_view aProgramName) {
+        const char *configHome = std::getenv("XDG_CONFIG_HOME");
+        if (configHome && *configHome)
+            return std::filesystem::path(configHome) / aProgramName;
 
-        return root;
+        return home_directory() / ".config" / aProgramName;
     }
 #elif defined JFC_TARGET_PLATFORM_Darwin
     std::filesystem::path get_path(std::string_view aProgramName) {
-        const char *home = std::getenv("HOME");
-        if (!home) throw jfc::storage::exception("HOME not found in environment");
+        return home_directory() / "Library" / "Application Support" / aProgramName;
+    }
 
-        std::filesystem::path root = std::filesystem::path(home) 
-            / "Library"
-            / "Application Support"
-            / aProgramName;
-
-        return root;
+    std::filesystem::path get_config_path(std::string_view aProgramName) {
+        return home_directory() / "Library" / "Preferences" / aProgramName;
     }
 #elif defined JFC_TARGET_PLATFORM_Windows
     std::filesystem::path get_path(std::string_view aProgramName) {
@@ -46,7 +61,27 @@ namespace {
         return std::filesystem::path(appData)
             / aProgramName;
     }
+
+    std::filesystem::path get_config_path(std::string_view aProgramName) {
+        return get_path(aProgramName);
+    }
 #endif
+
+    void restrict_to_owner(const std::filesystem::path &aPath, const bool aIsDirectory) {
+#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
+        std::error_code error;
+
+        std::filesystem::permissions(aPath,
+            aIsDirectory
+                ? std::filesystem::perms::owner_all
+                : std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+            std::filesystem::perm_options::replace,
+            error);
+#else
+        static_cast<void>(aPath);
+        static_cast<void>(aIsDirectory);
+#endif
+    }
 }
 
 store::store(std::string_view aProgramName) 
@@ -56,6 +91,19 @@ store::store(std::string_view aProgramName)
 store store::make_from_root(std::filesystem::path aRoot) {
     store newStore;
     newStore.mRoot = aRoot;
+    return newStore;
+}
+
+store store::make_config(std::string_view aProgramName) {
+    store newStore;
+    newStore.mRoot = get_config_path(aProgramName);
+    newStore.mRestrictToOwner = true;
+
+    std::error_code error;
+    std::filesystem::create_directories(newStore.mRoot, error);
+
+    if (!error || std::filesystem::exists(newStore.mRoot)) restrict_to_owner(newStore.mRoot, true);
+
     return newStore;
 }
 
@@ -91,6 +139,8 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
         std::error_code error;
         std::filesystem::create_directories(path->parent_path(), error);
         if (error) throw jfc::storage::exception("failed to create storage directory");
+
+        if (mRestrictToOwner) restrict_to_owner(path->parent_path(), true);
     }
 
     auto temporaryPath = *path;
@@ -111,6 +161,8 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
         if (!file)
             throw jfc::storage::exception("failed to write temporary file");
     }
+
+    if (mRestrictToOwner) restrict_to_owner(temporaryPath, false);
 
     std::error_code error;
     std::filesystem::rename(temporaryPath, *path, error);
