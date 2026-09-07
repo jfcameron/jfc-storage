@@ -102,6 +102,53 @@ TEST_CASE("a config store writes files only its owner can read", "[jfc::storage:
     std::filesystem::remove_all(root);
 }
 
+TEST_CASE("a config store tightens a file it finds already world readable",
+    "[jfc::storage::store]") {
+
+    const auto root = scratch();
+
+    const auto previous = ::getenv("XDG_CONFIG_HOME");
+    const std::string previousValue(previous ? previous : "");
+
+    ::setenv("XDG_CONFIG_HOME", root.c_str(), 1);
+
+    {
+        const auto directory = root / "some-program";
+        const auto file = directory / "conf.json";
+
+        std::filesystem::create_directories(directory);
+
+        {
+            std::ofstream stale(file);
+            stale << R"({"token":"secret"})";
+        }
+
+        std::filesystem::permissions(file,
+            std::filesystem::perms::owner_read | std::filesystem::perms::owner_write |
+            std::filesystem::perms::group_read | std::filesystem::perms::others_read,
+            std::filesystem::perm_options::replace);
+
+        REQUIRE(mode_of(file) != (std::filesystem::perms::owner_read |
+            std::filesystem::perms::owner_write));
+
+        auto store = store::make_config("some-program");
+
+        const auto loaded = store.load_file("conf.json");
+
+        REQUIRE(loaded);
+        REQUIRE(text(*loaded) == R"({"token":"secret"})");
+
+        INFO("mode after the read: " << static_cast<unsigned>(mode_of(file)));
+        REQUIRE(mode_of(file) ==
+            (std::filesystem::perms::owner_read | std::filesystem::perms::owner_write));
+    }
+
+    if (previous) ::setenv("XDG_CONFIG_HOME", previousValue.c_str(), 1);
+    else ::unsetenv("XDG_CONFIG_HOME");
+
+    std::filesystem::remove_all(root);
+}
+
 TEST_CASE("a plain store does not restrict permissions", "[jfc::storage::store]") {
     const auto root = scratch();
     auto store = store::make_from_root(root);
@@ -113,3 +160,4 @@ TEST_CASE("a plain store does not restrict permissions", "[jfc::storage::store]"
     std::filesystem::remove_all(root);
 }
 #endif
+

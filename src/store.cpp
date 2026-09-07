@@ -111,6 +111,8 @@ std::optional<std::vector<std::byte>> store::load_file(std::string_view aPath) c
     const auto path = resolve_path(aPath);
     if (!path) throw jfc::storage::exception("path escapes storage root");
 
+    if (mRestrictToOwner) restrict_to_owner(*path, false);
+
     std::ifstream file(*path, std::ios::binary | std::ios::ate);
     if (!file) {
         if (!std::filesystem::exists(*path)) return std::nullopt;
