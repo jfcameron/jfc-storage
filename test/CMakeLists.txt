@@ -8,8 +8,7 @@ jfc_add_tests(
         "${CMAKE_CURRENT_LIST_DIR}/store_test.cpp"
 
     LIBRARIES
-        "${${PROJECT_NAME}_LIBRARIES}"
+        jfcstorage
 
     INCLUDE_DIRECTORIES
-        "${${PROJECT_NAME}_INCLUDE_DIRECTORIES}"
 )

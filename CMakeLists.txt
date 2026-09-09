@@ -1,8 +1,11 @@
 # © Joseph Cameron - All Rights Reserved
 
-cmake_minimum_required(VERSION 3.9 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
-project(null)
+project(jfcstorage
+    VERSION 0.0
+    DESCRIPTION "crossplatform program storage manager"
+    LANGUAGES CXX)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jfc-cmake/jfclib.cmake")
 
@@ -33,20 +36,54 @@ else()
     endforeach()
 endif()
 
-jfc_project(library
-    NAME "jfcstorage"
-    VERSION 0.0
-    DESCRIPTION "crossplatform program storage manager"
-    C++_STANDARD 20
-    C_STANDARD 90
-    TYPE STATIC
+add_library(jfcstorage STATIC
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/store.cpp")
 
-    SOURCE_LIST
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/store.cpp
+add_library(jfc::storage ALIAS jfcstorage)
 
-    PUBLIC_INCLUDE_DIRECTORIES
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+set_target_properties(jfcstorage PROPERTIES EXPORT_NAME storage)
+
+set_target_properties(jfcstorage PROPERTIES PREFIX "lib")
+
+jfc_generate_cmake_header()
+
+target_include_directories(jfcstorage
+    PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+        "$<INSTALL_INTERFACE:include>"
+    PRIVATE
+        "${PROJECT_BINARY_DIR}/generated_include/")
+
+target_compile_features(jfcstorage PUBLIC cxx_std_20)
+
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(TARGETS jfcstorage
+    EXPORT jfcstorage-targets
+    ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")
+
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+
+install(EXPORT jfcstorage-targets
+    FILE jfcstorage-targets.cmake
+    NAMESPACE jfc::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/jfcstorage")
+
+write_basic_package_version_file(
+    "${PROJECT_BINARY_DIR}/jfcstorage-config-version.cmake"
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion)
+
+file(WRITE "${PROJECT_BINARY_DIR}/jfcstorage-config.cmake"
+"include(\"\${CMAKE_CURRENT_LIST_DIR}/jfcstorage-targets.cmake\")
+")
+
+install(FILES
+    "${PROJECT_BINARY_DIR}/jfcstorage-config.cmake"
+    "${PROJECT_BINARY_DIR}/jfcstorage-config-version.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/jfcstorage")
 
 if (JFC_BUILD_DEMO)
 #    add_subdirectory(demo)
@@ -56,3 +93,6 @@ if (JFC_BUILD_TESTS)
     add_subdirectory(test)
 endif()
 
+if (JFC_BUILD_DOCS)
+    add_subdirectory(docs)
+endif()
