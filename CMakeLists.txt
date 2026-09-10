@@ -45,7 +45,7 @@ set_target_properties(jfcstorage PROPERTIES EXPORT_NAME storage)
 
 set_target_properties(jfcstorage PROPERTIES PREFIX "lib")
 
-jfc_generate_cmake_header()
+jfc_generate_build_info()
 
 target_include_directories(jfcstorage
     PUBLIC

@@ -1,6 +1,6 @@
 // © Joseph Cameron - All Rights Reserved
 
-#include <jfcstorage/buildinfo.h> 
+#include <jfc/storage/build_info.h> 
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/store.h>
