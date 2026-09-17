@@ -5,6 +5,7 @@
 #include <jfc/storage/exception.h>
 #include <jfc/storage/store.h>
 
+#include <algorithm>
 #include <fstream>
 
 #if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
@@ -171,6 +172,51 @@ void store::save_file(std::string_view aPath, std::span<const std::byte> aData) 
     if (error) throw jfc::storage::exception( "failed to replace file");
 }
 
+namespace {
+    [[nodiscard]] std::vector<std::string> entries_in(const std::filesystem::path &aWhere,
+        const bool aDirectories) {
+        std::error_code error;
+
+        std::filesystem::directory_iterator each(aWhere,
+            std::filesystem::directory_options::none, error);
+
+        if (error) return {};
+
+        std::vector<std::string> out;
+
+        for (const auto &entry : each) {
+            const auto kind = entry.symlink_status(error);
+
+            if (error) continue;
+
+            if (aDirectories ? !std::filesystem::is_directory(kind) : !std::filesystem::is_regular_file(kind))
+                continue;
+
+            out.push_back(entry.path().filename().string());
+        }
+
+        std::sort(out.begin(), out.end());
+
+        return out;
+    }
+}
+
+std::vector<std::string> store::files(const std::string_view aPath) const {
+    const auto path = resolve_path(aPath);
+
+    if (!path) throw jfc::storage::exception("path escapes storage root");
+
+    return entries_in(*path, false);
+}
+
+std::vector<std::string> store::directories(const std::string_view aPath) const {
+    const auto path = resolve_path(aPath);
+
+    if (!path) throw jfc::storage::exception("path escapes storage root");
+
+    return entries_in(*path, true);
+}
+
 std::optional<std::filesystem::path> store::resolve_path(std::string_view aPath) const {
     const std::filesystem::path relative(aPath);
 
@@ -188,8 +234,7 @@ std::optional<std::filesystem::path> store::resolve_path(std::string_view aPath)
     return path;
 }
 
-void store::remove_file(std::string_view aPath)
-{
+void store::remove_file(std::string_view aPath) {
     const auto path = resolve_path(aPath);
     if (!path) throw jfc::storage::exception("path escapes storage root");
 
@@ -209,3 +254,4 @@ void store::move_file(std::string_view aOldPath, std::string_view aNewPath) {
     std::filesystem::rename(*oldPath, *newPath, error);
     if (error) throw jfc::storage::exception("failed to move file");
 }
+

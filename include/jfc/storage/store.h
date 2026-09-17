@@ -35,6 +35,20 @@ namespace jfc::storage {
         /// @param aPath path to the file
         void remove_file(std::string_view aPath);
 
+        /// @brief gets the names of the files directly in a directory, sorted alphanumerically
+        ///
+        /// The sort is done to standardize the order on all platforms
+        ///
+        /// @param aPath path to the directory, "" being the root
+        [[nodiscard]] std::vector<std::string> files(std::string_view aPath) const;
+
+        /// @brief gets the names of the sub directories in a given directory, sorted alphanumerically
+        ///
+        /// The sort is done to standardize the order on all platforms
+        ///
+        /// @param aPath path to the directory, "" being the root
+        [[nodiscard]] std::vector<std::string> directories(std::string_view aPath) const;
+
         /// @brief moves a file in storage from one path to another
         /// @param aOldPath initial path of the file
         /// @param aNewPath new path of the file

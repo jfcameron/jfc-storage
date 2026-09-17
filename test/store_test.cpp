@@ -161,3 +161,51 @@ TEST_CASE("a plain store does not restrict permissions", "[jfc::storage::store]"
 }
 #endif
 
+
+TEST_CASE("a store says what is in a directory", "[jfc::storage::store]") {
+    const auto root = std::filesystem::temp_directory_path() / "jfc_storage_listing_test";
+
+    std::filesystem::remove_all(root);
+    std::filesystem::create_directories(root);
+
+    auto store = jfc::storage::store::make_from_root(root);
+
+    const std::vector<std::byte> something{std::byte{7}};
+
+    store.save_file("worlds/vale/world.lua", something);
+    store.save_file("worlds/vale/1.0.0.chunk", something);
+    store.save_file("worlds/vale/0.0.0.chunk", something);
+    store.save_file("worlds/vale/deeper/2.0.0.chunk", something);
+    store.save_file("worlds/other/world.lua", something);
+
+    SECTION("the files directly in it, sorted, and not those below it") {
+        REQUIRE(store.files("worlds/vale")
+            == std::vector<std::string>{"0.0.0.chunk", "1.0.0.chunk", "world.lua"});
+    }
+
+    SECTION("the directories directly in it, which is how the worlds are found") {
+        REQUIRE(store.directories("worlds") == std::vector<std::string>{"other", "vale"});
+
+        REQUIRE(store.files("worlds").empty());
+        REQUIRE(store.directories("worlds/vale") == std::vector<std::string>{"deeper"});
+    }
+
+    SECTION("a directory that is not there is no files, not an error") {
+        REQUIRE(store.files("worlds/nowhere").empty());
+        REQUIRE(store.directories("worlds/nowhere").empty());
+        REQUIRE(store.files("worlds/vale/world.lua").empty());
+    }
+
+    SECTION("and it cannot be asked about anywhere but the store") {
+        REQUIRE_THROWS_AS(store.files("../.."), jfc::storage::exception);
+        REQUIRE_THROWS_AS(store.directories("/etc"), jfc::storage::exception);
+    }
+
+    SECTION("a file removed is gone from the listing") {
+        store.remove_file("worlds/vale/0.0.0.chunk");
+
+        REQUIRE(store.files("worlds/vale") == std::vector<std::string>{"1.0.0.chunk", "world.lua"});
+    }
+
+    std::filesystem::remove_all(root);
+}
