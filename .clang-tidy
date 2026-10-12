@@ -1,0 +1,10 @@
+Checks: '-*,readability-identifier-naming'
+WarningsAsErrors: '*'
+HeaderFilterRegex: '/jfc-storage/(include|impl|src|test)/'
+CheckOptions:
+  readability-identifier-naming.ParameterCase: CamelCase
+  readability-identifier-naming.ParameterPrefix: a
+  readability-identifier-naming.PointerParameterCase: CamelCase
+  readability-identifier-naming.PointerParameterPrefix: a
+  readability-identifier-naming.ParameterIgnoredRegexp: '^a?p[A-Z][a-zA-Z0-9]*$'
+  readability-identifier-naming.PointerParameterIgnoredRegexp: '^a?p[A-Z][a-zA-Z0-9]*$'

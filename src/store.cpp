@@ -1,257 +1,285 @@
 // © Joseph Cameron - All Rights Reserved
 
-#include <jfc/storage/build_info.h> 
-
 #include <jfc/storage/exception.h>
+#include <jfc/storage/path.h>
 #include <jfc/storage/store.h>
 
 #include <algorithm>
-#include <fstream>
+#include <array>
+#include <cctype>
+#include <cstddef>
+#include <utility>
 
-#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
-#include <pwd.h>
-#include <unistd.h>
-#endif
-
-using namespace jfc::storage;
+using namespace jfc;
 
 namespace {
-#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
-    std::filesystem::path home_directory() {
-        const char *home = std::getenv("HOME");
-        if (home && *home) return std::filesystem::path(home);
+    [[nodiscard]] std::string _printable(const std::string_view aPath) {
+        constexpr std::string_view HEX = "0123456789abcdef";
 
-        if (const passwd *const entry = ::getpwuid(::getuid());
-            entry && entry->pw_dir && *entry->pw_dir)
-            return std::filesystem::path(entry->pw_dir);
+        std::string out;
 
-        throw jfc::storage::exception(
-            "cannot locate a home directory: HOME is unset and this user has none on record");
-    }
-#endif
+        for (const char each : aPath) {
+            const auto byte = static_cast<unsigned char>(each);
 
-#ifdef JFC_TARGET_PLATFORM_Linux 
-    std::filesystem::path get_path(std::string_view aProgramName) {
-        const char *dataHome = std::getenv("XDG_DATA_HOME");
-        if (dataHome && *dataHome)
-            return std::filesystem::path(dataHome) / aProgramName;
-
-        return home_directory() / ".local" / "share" / aProgramName;
-    }
-
-    std::filesystem::path get_config_path(std::string_view aProgramName) {
-        const char *configHome = std::getenv("XDG_CONFIG_HOME");
-        if (configHome && *configHome)
-            return std::filesystem::path(configHome) / aProgramName;
-
-        return home_directory() / ".config" / aProgramName;
-    }
-#elif defined JFC_TARGET_PLATFORM_Darwin
-    std::filesystem::path get_path(std::string_view aProgramName) {
-        return home_directory() / "Library" / "Application Support" / aProgramName;
-    }
-
-    std::filesystem::path get_config_path(std::string_view aProgramName) {
-        return home_directory() / "Library" / "Preferences" / aProgramName;
-    }
-#elif defined JFC_TARGET_PLATFORM_Windows
-    std::filesystem::path get_path(std::string_view aProgramName) {
-        const char *appData = std::getenv("APPDATA");
-        if (!appData) throw jfc::storage::exception("APPDATA not found in environment");
-
-        return std::filesystem::path(appData)
-            / aProgramName;
-    }
-
-    std::filesystem::path get_config_path(std::string_view aProgramName) {
-        return get_path(aProgramName);
-    }
-#endif
-
-    void restrict_to_owner(const std::filesystem::path &aPath, const bool aIsDirectory) {
-#if defined JFC_TARGET_PLATFORM_Linux || defined JFC_TARGET_PLATFORM_Darwin
-        std::error_code error;
-
-        std::filesystem::permissions(aPath,
-            aIsDirectory
-                ? std::filesystem::perms::owner_all
-                : std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
-            std::filesystem::perm_options::replace,
-            error);
-#else
-        static_cast<void>(aPath);
-        static_cast<void>(aIsDirectory);
-#endif
-    }
-}
-
-store::store(std::string_view aProgramName) 
-: mRoot(get_path(aProgramName))
-{}
-
-store store::make_from_root(std::filesystem::path aRoot) {
-    store newStore;
-    newStore.mRoot = aRoot;
-    return newStore;
-}
-
-store store::make_config(std::string_view aProgramName) {
-    store newStore;
-    newStore.mRoot = get_config_path(aProgramName);
-    newStore.mRestrictToOwner = true;
-
-    std::error_code error;
-    std::filesystem::create_directories(newStore.mRoot, error);
-
-    if (!error || std::filesystem::exists(newStore.mRoot)) restrict_to_owner(newStore.mRoot, true);
-
-    return newStore;
-}
-
-std::optional<std::vector<std::byte>> store::load_file(std::string_view aPath) const {
-    const auto path = resolve_path(aPath);
-    if (!path) throw jfc::storage::exception("path escapes storage root");
-
-    if (mRestrictToOwner) restrict_to_owner(*path, false);
-
-    std::ifstream file(*path, std::ios::binary | std::ios::ate);
-    if (!file) {
-        if (!std::filesystem::exists(*path)) return std::nullopt;
-        throw jfc::storage::exception("failed to open file");
-    }
-
-    const auto size = file.tellg();
-    if (size < 0) return std::nullopt;
-
-    std::vector<std::byte> contents(static_cast<std::size_t>(size));
-
-    file.seekg(0, std::ios::beg);
-
-    if (!file.read(reinterpret_cast<char *>(contents.data()),
-        static_cast<std::streamsize>(contents.size())))
-        return std::nullopt;
-
-    return contents;
-}
-
-void store::save_file(std::string_view aPath, std::span<const std::byte> aData) {
-    const auto path = resolve_path(aPath);
-    if (!path) throw jfc::storage::exception("path escapes storage root");
-
-    {
-        std::error_code error;
-        std::filesystem::create_directories(path->parent_path(), error);
-        if (error) throw jfc::storage::exception("failed to create storage directory");
-
-        if (mRestrictToOwner) restrict_to_owner(path->parent_path(), true);
-    }
-
-    auto temporaryPath = *path;
-    temporaryPath += ".tmp";
-
-    {
-        std::ofstream file(
-            temporaryPath,
-            std::ios::binary | std::ios::trunc);
-
-        if (!file)
-            throw jfc::storage::exception("failed to open temporary file for writing");
-
-        file.write(
-            reinterpret_cast<const char *>(aData.data()),
-            static_cast<std::streamsize>(aData.size()));
-
-        if (!file)
-            throw jfc::storage::exception("failed to write temporary file");
-    }
-
-    if (mRestrictToOwner) restrict_to_owner(temporaryPath, false);
-
-    std::error_code error;
-    std::filesystem::rename(temporaryPath, *path, error);
-    if (error) throw jfc::storage::exception( "failed to replace file");
-}
-
-namespace {
-    [[nodiscard]] std::vector<std::string> entries_in(const std::filesystem::path &aWhere,
-        const bool aDirectories) {
-        std::error_code error;
-
-        std::filesystem::directory_iterator each(aWhere,
-            std::filesystem::directory_options::none, error);
-
-        if (error) return {};
-
-        std::vector<std::string> out;
-
-        for (const auto &entry : each) {
-            const auto kind = entry.symlink_status(error);
-
-            if (error) continue;
-
-            if (aDirectories ? !std::filesystem::is_directory(kind) : !std::filesystem::is_regular_file(kind))
-                continue;
-
-            out.push_back(entry.path().filename().string());
+            if (byte < 0x20 || byte == 0x7F) out += std::string("\\x") + HEX[byte >> 4] + HEX[byte & 0xF];
+            else out += each;
         }
 
-        std::sort(out.begin(), out.end());
+        return out;
+    }
+
+    [[nodiscard]] std::string _message(const std::string_view aOperation, const std::string_view aPath,
+        const std::string_view aWhy) {
+        return "jfc::storage: cannot " + std::string(aOperation) + " \"" + _printable(aPath) + "\": "
+            + std::string(aWhy);
+    }
+
+    [[nodiscard]] storage::path_refused _refused(const std::string_view aOperation, const std::string_view aPath,
+        const std::string_view aWhy) {
+        return storage::path_refused(_message(aOperation, aPath, aWhy));
+    }
+
+    [[nodiscard]] storage::exception _failed(const std::string_view aOperation, const std::string_view aPath,
+        const std::string_view aWhy) {
+        return storage::exception(_message(aOperation, aPath, aWhy));
+    }
+
+    [[nodiscard]] bool _is_utf8(const std::string_view aText) {
+        for (std::size_t i = 0; i < aText.size();) {
+            const auto lead = static_cast<unsigned char>(aText[i]);
+
+            std::size_t length;
+            char32_t codePoint;
+
+            if (lead < 0x80) { ++i; continue; }
+            else if ((lead & 0xE0) == 0xC0) { length = 2; codePoint = lead & 0x1F; }
+            else if ((lead & 0xF0) == 0xE0) { length = 3; codePoint = lead & 0x0F; }
+            else if ((lead & 0xF8) == 0xF0) { length = 4; codePoint = lead & 0x07; }
+            else return false;
+
+            if (i + length > aText.size()) return false;
+
+            for (std::size_t j = 1; j < length; ++j) {
+                const auto continuation = static_cast<unsigned char>(aText[i + j]);
+
+                if ((continuation & 0xC0) != 0x80) return false;
+
+                codePoint = (codePoint << 6) | (continuation & 0x3F);
+            }
+
+            constexpr std::array<char32_t, 5> SMALLEST_FOR_LENGTH{0, 0, 0x80, 0x800, 0x10000};
+
+            if (codePoint < SMALLEST_FOR_LENGTH[length]) return false;
+            if (codePoint > 0x10FFFF) return false;
+            if (codePoint >= 0xD800 && codePoint <= 0xDFFF) return false;
+
+            i += length;
+        }
+
+        return true;
+    }
+
+    [[nodiscard]] bool _is_device_name(const std::string_view aName) {
+        std::string stem(aName.substr(0, aName.find('.')));
+
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](const unsigned char aCharacter) {
+            return static_cast<char>(std::tolower(aCharacter));
+        });
+
+        if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul") return true;
+
+        return stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt"))
+            && stem[3] >= '1' && stem[3] <= '9';
+    }
+
+    [[nodiscard]] bool _is_reserved_name(const std::string_view aName) {
+        constexpr std::string_view RESERVED = ".jfc-storage";
+
+        if (aName.size() < RESERVED.size()) return false;
+
+        return std::equal(RESERVED.begin(), RESERVED.end(), aName.begin(), [](const char aReserved, const char aEach) {
+            return aReserved == std::tolower(static_cast<unsigned char>(aEach));
+        });
+    }
+
+    [[nodiscard]] std::string_view _unportable_character(const char aCharacter) {
+        switch (aCharacter) {
+            case '\\': return "it contains '\\'; the separator is '/'";
+            case ':': return "it contains ':', which windows reads as a drive or a stream";
+            case '*': case '?': case '"': case '<': case '>': case '|':
+                return "it contains a character windows does not allow in a name: * ? \" < > |";
+            default: break;
+        }
+
+        if (const auto byte = static_cast<unsigned char>(aCharacter); byte < 0x20 || byte == 0x7F)
+            return "it contains a control character";
+
+        return {};
+    }
+
+    struct _resolution final {
+        std::string path; 
+        std::string_view refusal; 
+    };
+
+    [[nodiscard]] _resolution _resolve(const std::string_view aPath) {
+        if (!_is_utf8(aPath)) return {{}, "it is not UTF-8"};
+
+        if (aPath.starts_with('/')) return {{}, "it is absolute; paths are relative to the store"};
+
+        for (const char each : aPath)
+            if (const auto why = _unportable_character(each); !why.empty()) return {{}, why};
+
+        std::vector<std::string_view> names;
+
+        for (std::size_t begin = 0; begin <= aPath.size();) {
+            const auto end = std::min(aPath.find('/', begin), aPath.size());
+            const auto name = aPath.substr(begin, end - begin);
+
+            begin = end + 1;
+
+            if (name.empty() || name == ".") continue;
+
+            if (name == "..") {
+                if (names.empty()) return {{}, "it climbs above the store's root"};
+
+                names.pop_back();
+
+                continue;
+            }
+
+            if (name.ends_with('.') || name.ends_with(' '))
+                return {{}, "a name ends in '.' or ' ', which windows removes"};
+
+            if (_is_device_name(name)) return {{}, "a name is one windows reserves for a device"};
+
+            if (_is_reserved_name(name))
+                return {{}, "a name begins \".jfc-storage\", which stores keep for their own use"};
+
+            names.push_back(name);
+        }
+
+        _resolution out;
+
+        for (const auto name : names) {
+            if (!out.path.empty()) out.path += '/';
+
+            out.path += name;
+        }
+
+        return out;
+    }
+
+    [[nodiscard]] std::string _resolved(const std::string_view aOperation, const std::string_view aPath) {
+        auto resolution = _resolve(aPath);
+
+        if (!resolution.refusal.empty()) throw _refused(aOperation, aPath, resolution.refusal);
+
+        return std::move(resolution.path);
+    }
+
+    [[nodiscard]] std::string _resolved_file(const std::string_view aOperation, const std::string_view aPath) {
+        auto out = _resolved(aOperation, aPath);
+
+        if (out.empty()) throw _refused(aOperation, aPath, "it names the store's root, not a file");
+
+        return out;
+    }
+
+    [[nodiscard]] std::string _resolved_directory(const std::string_view aOperation, const std::string_view aPath) {
+        auto out = _resolved(aOperation, aPath);
+
+        if (out.empty()) throw _refused(aOperation, aPath, "it is the store's root");
 
         return out;
     }
 }
 
-std::vector<std::string> store::files(const std::string_view aPath) const {
-    const auto path = resolve_path(aPath);
+std::optional<std::string> storage::path_refusal(const std::string_view aPath) {
+    const auto resolution = _resolve(aPath);
 
-    if (!path) throw jfc::storage::exception("path escapes storage root");
+    if (resolution.refusal.empty()) return std::nullopt;
 
-    return entries_in(*path, false);
+    return std::string(resolution.refusal);
 }
 
-std::vector<std::string> store::directories(const std::string_view aPath) const {
-    const auto path = resolve_path(aPath);
-
-    if (!path) throw jfc::storage::exception("path escapes storage root");
-
-    return entries_in(*path, true);
+std::optional<storage::file_data_type> storage::store::load_file(const std::string_view aPath) const {
+    return _load_file(_resolved_file("load", aPath));
 }
 
-std::optional<std::filesystem::path> store::resolve_path(std::string_view aPath) const {
-    const std::filesystem::path relative(aPath);
-
-    if (relative.is_absolute()) return std::nullopt;
-
-    const auto root = mRoot.lexically_normal();
-    const auto path = (root / relative).lexically_normal();
-
-    auto rootIt = root.begin();
-    auto pathIt = path.begin();
-
-    for (; rootIt != root.end(); ++rootIt, ++pathIt)
-        if (pathIt == path.end() || *rootIt != *pathIt) return std::nullopt;
-
-    return path;
+bool storage::store::contains_file(const std::string_view aPath) const {
+    return _contains_file(_resolved_file("look for the file", aPath));
 }
 
-void store::remove_file(std::string_view aPath) {
-    const auto path = resolve_path(aPath);
-    if (!path) throw jfc::storage::exception("path escapes storage root");
+bool storage::store::contains_directory(const std::string_view aDirectory) const {
+    const auto directory = _resolved("look for the directory", aDirectory);
 
-    std::error_code error;
-    std::filesystem::remove(*path, error);
-    if (error) throw jfc::storage::exception("failed to remove file");
+    return directory.empty() || _contains_directory(directory);
 }
 
-void store::move_file(std::string_view aOldPath, std::string_view aNewPath) {
-    const auto oldPath = resolve_path(aOldPath);
-    if (!oldPath) throw jfc::storage::exception("source path escapes storage root");
-
-    const auto newPath = resolve_path(aNewPath);
-    if (!newPath) throw jfc::storage::exception("destination path escapes storage root");
-
-    std::error_code error;
-    std::filesystem::rename(*oldPath, *newPath, error);
-    if (error) throw jfc::storage::exception("failed to move file");
+std::vector<std::string> storage::store::files(const std::string_view aDirectory) const {
+    return _files(_resolved("list the files in", aDirectory));
 }
 
+std::vector<std::string> storage::store::directories(const std::string_view aDirectory) const {
+    return _directories(_resolved("list the directories in", aDirectory));
+}
+
+void storage::store::save_file(const std::string_view aPath, const file_view_type aData) {
+    _save_file(_resolved_file("save", aPath), aData);
+}
+
+void storage::store::remove_file(const std::string_view aPath) {
+    const auto path = _resolved_file("remove", aPath);
+
+    if (_contains_file(path)) _remove_file(path);
+}
+
+void storage::store::remove_directory(const std::string_view aDirectory) {
+    const auto directory = _resolved_directory("remove the directory", aDirectory);
+
+    if (_contains_directory(directory)) _remove_directory(directory);
+}
+
+void storage::store::move_file(const std::string_view aOldPath, const std::string_view aNewPath) {
+    const auto oldPath = _resolved_file("move from", aOldPath);
+    const auto newPath = _resolved_file("move to", aNewPath);
+
+    if (!_contains_file(oldPath)) throw _failed("move", aOldPath, "there is no file there");
+
+    if (_contains_directory(newPath))
+        throw _failed("move", aOldPath, "a directory is at \"" + newPath + "\"");
+
+    _move_file(oldPath, newPath);
+}
+
+void storage::store::move_directory(const std::string_view aOldDirectory, const std::string_view aNewDirectory) {
+    const auto oldDirectory = _resolved_directory("move the directory from", aOldDirectory);
+    const auto newDirectory = _resolved_directory("move the directory to", aNewDirectory);
+
+    if (newDirectory == oldDirectory || newDirectory.starts_with(oldDirectory + "/"))
+        throw _refused("move the directory to", aNewDirectory, "it is in the directory being moved");
+
+    if (!_contains_directory(oldDirectory))
+        throw _failed("move the directory", aOldDirectory, "there is no directory there");
+
+    if (_contains_file(newDirectory) || _contains_directory(newDirectory))
+        throw _failed("move the directory", aOldDirectory, "something is at \"" + newDirectory + "\"");
+
+    _move_directory(oldDirectory, newDirectory);
+}
+
+bool storage::store::_contains_file(const std::string &aPath) const {
+    return _load_file(aPath).has_value();
+}
+
+bool storage::store::_contains_directory(const std::string &aDirectory) const {
+    const auto slash = aDirectory.rfind('/');
+
+    const auto parent = slash == std::string::npos ? std::string() : aDirectory.substr(0, slash);
+    const auto name = slash == std::string::npos ? aDirectory : aDirectory.substr(slash + 1);
+
+    const auto listed = _directories(parent);
+
+    return std::binary_search(listed.begin(), listed.end(), name);
+}

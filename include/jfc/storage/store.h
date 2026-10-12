@@ -3,69 +3,74 @@
 #ifndef JFC_STORAGE_STORE_H
 #define JFC_STORAGE_STORE_H
 
-#include <filesystem>
+#include <jfc/storage/types.h>
+
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace jfc::storage {
-    /// @brief read/write files on disk in a directory provided by the OS for this program 
-    class store final {
-        std::filesystem::path mRoot;
-
-        bool mRestrictToOwner = false;
-
-        std::optional<std::filesystem::path> resolve_path(std::string_view aPath) const;
-
-        store() = default;
+    class store {
     public:
-        /// @brief loads file contents to memory
-        /// @param aPath path to the file
-        /// @return contents
-        std::optional<std::vector<std::byte>> load_file(std::string_view aPath) const;
+        /// \brief the contents of a file, or nothing if there is no file at aPath
+        [[nodiscard]] std::optional<file_data_type> load_file(std::string_view aPath) const;
 
-        /// @brief saves data to temporary file then swaps it with the file at aPath
-        /// @param aPath path to the file
-        /// @param aData data
-        void save_file(std::string_view aPath, std::span<const std::byte> aData);
+        /// \brief whether there is a file at aPath
+        [[nodiscard]] bool contains_file(std::string_view aPath) const;
 
-        /// @brief removes a file from storage
-        /// @param aPath path to the file
+        /// \brief whether there is a directory at aDirectory
+        [[nodiscard]] bool contains_directory(std::string_view aDirectory) const;
+
+        /// \brief names of the files directly in a directory, in byte order
+        [[nodiscard]] std::vector<std::string> files(std::string_view aDirectory) const;
+
+        /// \brief names of the directories directly in a directory
+        [[nodiscard]] std::vector<std::string> directories(std::string_view aDirectory) const;
+
+        /// \brief write a file, replacing any already there
+        void save_file(std::string_view aPath, file_view_type aData);
+
+        /// \brief remove a file
         void remove_file(std::string_view aPath);
 
-        /// @brief gets the names of the files directly in a directory, sorted alphanumerically
-        ///
-        /// The sort is done to standardize the order on all platforms
-        ///
-        /// @param aPath path to the directory, "" being the root
-        [[nodiscard]] std::vector<std::string> files(std::string_view aPath) const;
+        /// \brief remove a directory and everything in it
+        void remove_directory(std::string_view aDirectory);
 
-        /// @brief gets the names of the sub directories in a given directory, sorted alphanumerically
-        ///
-        /// The sort is done to standardize the order on all platforms
-        ///
-        /// @param aPath path to the directory, "" being the root
-        [[nodiscard]] std::vector<std::string> directories(std::string_view aPath) const;
-
-        /// @brief moves a file in storage from one path to another
-        /// @param aOldPath initial path of the file
-        /// @param aNewPath new path of the file
+        /// \brief move a file, replacing any file already at aNewPath
         void move_file(std::string_view aOldPath, std::string_view aNewPath);
 
-        /// @brief constructs storage, the root directory is set to a directory named 
-        /// aProgramName in an OS specific application data directory
-        /// @param aProgramName 
-        store(std::string_view aProgramName);
+        /// \brief move a directory and everything in it
+        void move_directory(std::string_view aOldDirectory, std::string_view aNewDirectory);
 
-        /// @brief constructs storage with a user-defined root directory
-        /// @param aRoot path to the root directory
-        static store make_from_root(std::filesystem::path aRoot);
+        store(const store &) = delete;
+        store &operator=(const store &) = delete;
 
-        /// @brief a store rooted in this user's *configuration* directory
-        /// @param aProgramName the directory name, conventionally the program's
-        static store make_config(std::string_view aProgramName);
+        virtual ~store() = default;
+
+    protected:
+        store() = default;
+
+    private:
+        [[nodiscard]] virtual std::optional<file_data_type> _load_file(const std::string &aPath) const = 0;
+
+        [[nodiscard]] virtual bool _contains_file(const std::string &aPath) const;
+
+        [[nodiscard]] virtual bool _contains_directory(const std::string &aDirectory) const;
+
+        [[nodiscard]] virtual std::vector<std::string> _files(const std::string &aDirectory) const = 0;
+
+        [[nodiscard]] virtual std::vector<std::string> _directories(const std::string &aDirectory) const = 0;
+
+        virtual void _save_file(const std::string &aPath, file_view_type aData) = 0;
+
+        virtual void _remove_file(const std::string &aPath) = 0;
+
+        virtual void _remove_directory(const std::string &aDirectory) = 0;
+
+        virtual void _move_file(const std::string &aOldPath, const std::string &aNewPath) = 0;
+
+        virtual void _move_directory(const std::string &aOldDirectory, const std::string &aNewDirectory) = 0;
     };
 }
 
