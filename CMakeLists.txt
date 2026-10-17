@@ -14,7 +14,7 @@ include(GNUInstallDirs)
 option(JFCSTORAGE_BUILD_TESTS "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(JFCSTORAGE_BUILD_DOCS "Build documentation" OFF)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME MATCHES "BSD$")
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME MATCHES "BSD$" OR ANDROID)
     set(_jfcstorage_user_directories "xdg")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(_jfcstorage_user_directories "macos")
@@ -22,6 +22,8 @@ elseif (CMAKE_SYSTEM_NAME STREQUAL "iOS")
     set(_jfcstorage_user_directories "ios")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(_jfcstorage_user_directories "windows")
+elseif (EMSCRIPTEN)
+    set(_jfcstorage_user_directories "emscripten")
 else()
     set(_jfcstorage_user_directories "")
 endif()
@@ -139,6 +141,21 @@ if (_jfcstorage_user_directories)
     list(APPEND _jfcstorage_targets jfcstorage_user_directories)
 endif()
 
+if (EMSCRIPTEN)
+    _jfcstorage_library(jfcstorage_persistent storage_persistent
+        "${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/src/persistent_directory.cpp")
+
+    target_include_directories(jfcstorage_persistent PUBLIC
+        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/include>"
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
+
+    target_link_libraries(jfcstorage_persistent PUBLIC jfcstorage_interface)
+
+    target_link_options(jfcstorage_persistent PUBLIC "-lidbfs.js")
+
+    list(APPEND _jfcstorage_targets jfcstorage_persistent)
+endif()
+
 add_library(jfcstorage INTERFACE)
 
 add_library(jfc::storage ALIAS jfcstorage)
@@ -164,6 +181,11 @@ set(_jfcstorage_public_include_directories
 if (_jfcstorage_user_directories)
     list(APPEND _jfcstorage_public_include_directories
         "${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/include/")
+endif()
+
+if (EMSCRIPTEN)
+    list(APPEND _jfcstorage_public_include_directories
+        "${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/include/")
 endif()
 
 install(DIRECTORY ${_jfcstorage_public_include_directories}
