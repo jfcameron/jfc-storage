@@ -4,6 +4,7 @@
 #include <jfc/storage/ext/copy.h>
 
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace jfc;
@@ -19,7 +20,7 @@ namespace {
             + "\": " + std::string(aWhy));
     }
 
-    void _files_below(const storage::store &aStore, const std::string &aDirectory, const std::string &aRelative,
+    void _files_below(const storage::store &aStore, std::string_view aDirectory, std::string_view aRelative,
         std::vector<std::string> &aOut) {
         for (const auto &each : aStore.files(aDirectory)) aOut.push_back(_in(aRelative, each));
 

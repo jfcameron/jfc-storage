@@ -11,12 +11,13 @@
 #include <jfc/storage/store.h>
 
 #include <string>
+#include <string_view>
 
 using namespace jfc;
 using namespace jfc_storage_test;
 
 namespace {
-    void require_refused(const std::string &aPath, const std::string &aWhy, const std::string &aShownAs) {
+    void require_refused(std::string_view aPath, std::string_view aWhy, std::string_view aShownAs) {
         auto store = storage::make_null_store();
 
         INFO("path \"" << aShownAs << "\"");
@@ -24,7 +25,7 @@ namespace {
         REQUIRE(storage::path_refusal(aPath) == aWhy);
 
         REQUIRE_THROWS_MATCHES(store->save_file(aPath, bytes("x")), storage::path_refused,
-            Catch::Matchers::Message("jfc::storage: cannot save \"" + aShownAs + "\": " + aWhy));
+            Catch::Matchers::Message("jfc::storage: cannot save \"" + std::string(aShownAs) + "\": " + std::string(aWhy)));
 
         REQUIRE_THROWS_AS(store->load_file(aPath), storage::path_refused);
         REQUIRE_THROWS_AS(store->contains_file(aPath), storage::path_refused);
@@ -39,11 +40,11 @@ namespace {
         REQUIRE_THROWS_AS(store->move_directory("fine", aPath), storage::path_refused);
     }
 
-    void require_refused(const std::string &aPath, const std::string &aWhy) {
+    void require_refused(std::string_view aPath, std::string_view aWhy) {
         require_refused(aPath, aWhy, aPath);
     }
 
-    void require_accepted(const std::string &aPath) {
+    void require_accepted(std::string_view aPath) {
         auto store = storage::make_memory_store();
 
         INFO("path \"" << aPath << "\"");

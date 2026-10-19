@@ -40,19 +40,19 @@ namespace {
         return out;
     }
 
-    [[nodiscard]] bool _is_in(const std::string &aPath, const std::string &aDirectory) {
-        return aPath == aDirectory || aPath.starts_with(aDirectory + "/");
+    [[nodiscard]] bool _is_in(std::string_view aPath, std::string_view aDirectory) {
+        return aPath == aDirectory || aPath.starts_with(std::string(aDirectory) + "/");
     }
 
     class _memory_store final : public storage::store {
-        std::map<std::string, storage::file_data_type> mFiles;
+        std::map<std::string, storage::file_data_type, std::less<>> mFiles;
 
         std::set<std::string> mDirectories; 
 
-        [[nodiscard]] storage::exception _failed(const std::string_view aOperation, const std::string &aPath,
-            const std::string &aWhy) const {
-            return storage::exception("jfc::storage: cannot " + std::string(aOperation) + " \"" + aPath + "\": "
-                + aWhy);
+        [[nodiscard]] storage::exception _failed(const std::string_view aOperation, std::string_view aPath,
+            std::string_view aWhy) const {
+            return storage::exception("jfc::storage: cannot " + std::string(aOperation) + " \"" + std::string(aPath) + "\": "
+                + std::string(aWhy));
         }
 
         void _make_directories_for(const std::string_view aOperation, const std::string &aPath) {

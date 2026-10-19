@@ -16,7 +16,7 @@
 using namespace jfc;
 
 namespace {
-    [[nodiscard]] std::filesystem::path _native(const std::string &aPath) {
+    [[nodiscard]] std::filesystem::path _native(std::string_view aPath) {
         return std::filesystem::path(std::u8string(aPath.begin(), aPath.end()));
     }
 
@@ -64,9 +64,9 @@ namespace {
 
         storage::filesystem_store_config mConfig;
 
-        [[nodiscard]] storage::exception _failed(const std::string_view aOperation, const std::string &aPath,
+        [[nodiscard]] storage::exception _failed(const std::string_view aOperation, std::string_view aPath,
             const std::string_view aWhy, const std::error_code aError = {}) const {
-            std::string what = "jfc::storage: cannot " + std::string(aOperation) + " \"" + aPath + "\" in \""
+            std::string what = "jfc::storage: cannot " + std::string(aOperation) + " \"" + std::string(aPath) + "\" in \""
                 + _utf8(mRoot) + "\": " + std::string(aWhy);
 
             if (aError) what += ": " + aError.message();

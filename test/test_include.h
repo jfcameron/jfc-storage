@@ -8,6 +8,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <span>
 
 namespace jfc_storage_test {
     [[nodiscard]] inline std::vector<std::byte> bytes(const std::string_view aText) {
@@ -18,7 +19,7 @@ namespace jfc_storage_test {
         return out;
     }
 
-    [[nodiscard]] inline std::string text(const std::vector<std::byte> &aBytes) {
+    [[nodiscard]] inline std::string text(std::span<const std::byte> aBytes) {
         std::string out;
 
         for (const std::byte each : aBytes) out.push_back(static_cast<char>(each));
