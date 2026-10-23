@@ -1,8 +1,24 @@
 # jfc-storage
-Cross-platform file storage for application data
+Library for reading/writing application data and configuration in platform appropriate locations (~/.local and ~/.config on linux, C:\Users\<Username>\AppData on windows).
 
-## Systems
+## Getting Started
+Install cmake 3.21 or greater, and a c++20 compatible compiler 
+```
+# initialize the tree
+git submodule update --init --recursive
 
+# generate the script to build the library on linux using gcc
+cmake --preset linux-gcc
+
+# build the library
+cmake --build --preset linux-gcc
+
+# run the test suite
+ctest --preset linux-gcc
+```
+See `CMakePresets.json` for the full list of supported platforms and compilers. See `.github/workflows/ci.yml` to see exactly how CI runners build it on different platforms.
+
+## Supported platforms
 | system | stores | user directories |
 | --- | --- | --- |
 | Linux | yes | XDG base directories |
@@ -12,24 +28,8 @@ Cross-platform file storage for application data
 | Android | yes | none: see below |
 | Emscripten | yes | none |
 
-## Building
-
-```sh
-cmake --preset linux-gcc && cmake --build --preset linux-gcc && ctest --preset linux-gcc
-```
-
-`CMakePresets.json` lists every supported build. 
-
 ## Paths
-
 Paths are UTF-8 names separated by `/`, relative to the store's root. 
 Absolute paths are refused. Paths that climb above the root, `\ : * ? " < > |`, control characters, names ending in `.` or a space, and names Windows keeps for devices (`con`, `nul`, `com1`...) are all refused.
 Names beginning `.jfc-storage` are kept for stores' own use. 
 Whether `A` and `a` are the same file is up to the system.
-
-`jfc::storage::path_refusal(path)` says why a path would be refused, or nothing, for checking a name before it is
-used -- a player's name for a saved world, say. A listing only names what a path can reach, so a file put in a
-store's directory from outside under a refused name is not listed.
-
-Paths are checked as written: a filesystem store follows links, so a link placed under its root can lead outside it.
-
