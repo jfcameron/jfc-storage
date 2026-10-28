@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/path.h>
@@ -44,6 +44,11 @@ namespace {
         return storage::exception(_message(aOperation, aPath, aWhy));
     }
 
+    [[nodiscard]] storage::not_found _not_found(const std::string_view aOperation, const std::string_view aPath,
+        const std::string_view aWhy) {
+        return storage::not_found(_message(aOperation, aPath, aWhy));
+    }
+
     [[nodiscard]] bool _is_utf8(const std::string_view aText) {
         for (std::size_t i = 0; i < aText.size();) {
             const auto lead = static_cast<unsigned char>(aText[i]);
@@ -82,14 +87,19 @@ namespace {
     [[nodiscard]] bool _is_device_name(const std::string_view aName) {
         std::string stem(aName.substr(0, aName.find('.')));
 
-        std::transform(stem.begin(), stem.end(), stem.begin(), [](const unsigned char aCharacter) {
-            return static_cast<char>(std::tolower(aCharacter));
+        std::transform(stem.begin(), stem.end(), stem.begin(), [](const char aCharacter) {
+            return aCharacter >= 'A' && aCharacter <= 'Z' ? static_cast<char>(aCharacter - 'A' + 'a') : aCharacter;
         });
 
-        if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul") return true;
+        if (stem == "con" || stem == "prn" || stem == "aux" || stem == "nul" || stem == "conin$" || stem == "conout$")
+            return true;
 
-        return stem.size() == 4 && (stem.starts_with("com") || stem.starts_with("lpt"))
-            && stem[3] >= '1' && stem[3] <= '9';
+        if (stem.size() < 4 || !(stem.starts_with("com") || stem.starts_with("lpt"))) return false;
+
+        const auto number = std::string_view(stem).substr(3);
+
+        return (number.size() == 1 && number[0] >= '1' && number[0] <= '9')
+            || number == "\xC2\xB9" || number == "\xC2\xB2" || number == "\xC2\xB3";
     }
 
     [[nodiscard]] bool _is_reserved_name(const std::string_view aName) {
@@ -211,6 +221,10 @@ bool storage::store::contains_file(const std::string_view aPath) const {
     return _contains_file(_resolved_file("look for the file", aPath));
 }
 
+std::optional<storage::file_info> storage::store::file_info(const std::string_view aPath) const {
+    return _file_info(_resolved_file("look at", aPath));
+}
+
 bool storage::store::contains_directory(const std::string_view aDirectory) const {
     const auto directory = _resolved("look for the directory", aDirectory);
 
@@ -229,6 +243,16 @@ void storage::store::save_file(const std::string_view aPath, const file_view_typ
     _save_file(_resolved_file("save", aPath), aData);
 }
 
+void storage::store::make_directory(const std::string_view aDirectory) {
+    const auto directory = _resolved("make the directory", aDirectory);
+
+    if (directory.empty() || _contains_directory(directory)) return;
+
+    if (_contains_file(directory)) throw _failed("make the directory", aDirectory, "a file is there");
+
+    _make_directory(directory);
+}
+
 void storage::store::remove_file(const std::string_view aPath) {
     const auto path = _resolved_file("remove", aPath);
 
@@ -245,7 +269,7 @@ void storage::store::move_file(const std::string_view aOldPath, const std::strin
     const auto oldPath = _resolved_file("move from", aOldPath);
     const auto newPath = _resolved_file("move to", aNewPath);
 
-    if (!_contains_file(oldPath)) throw _failed("move", aOldPath, "there is no file there");
+    if (!_contains_file(oldPath)) throw _not_found("move", aOldPath, "there is no file there");
 
     if (_contains_directory(newPath))
         throw _failed("move", aOldPath, "a directory is at \"" + newPath + "\"");
@@ -261,7 +285,7 @@ void storage::store::move_directory(const std::string_view aOldDirectory, const 
         throw _refused("move the directory to", aNewDirectory, "it is in the directory being moved");
 
     if (!_contains_directory(oldDirectory))
-        throw _failed("move the directory", aOldDirectory, "there is no directory there");
+        throw _not_found("move the directory", aOldDirectory, "there is no directory there");
 
     if (_contains_file(newDirectory) || _contains_directory(newDirectory))
         throw _failed("move the directory", aOldDirectory, "something is at \"" + newDirectory + "\"");

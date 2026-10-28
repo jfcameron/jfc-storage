@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/impl_flush.h>
 
@@ -15,6 +15,20 @@ using namespace jfc;
 namespace {
     [[nodiscard]] std::error_code _last_error() {
         return {static_cast<int>(::GetLastError()), std::system_category()};
+    }
+
+    [[nodiscard]] std::error_code _move(const std::filesystem::path &aFrom, const std::filesystem::path &aTo,
+        const DWORD aFlags) {
+        for (DWORD wait = 1;; wait *= 2) {
+            if (::MoveFileExW(aFrom.c_str(), aTo.c_str(), MOVEFILE_REPLACE_EXISTING | aFlags)) return {};
+
+            const DWORD error = ::GetLastError();
+
+            if ((error != ERROR_ACCESS_DENIED && error != ERROR_SHARING_VIOLATION) || wait > 512)
+                return {static_cast<int>(error), std::system_category()};
+
+            ::Sleep(wait);
+        }
     }
 }
 
@@ -33,15 +47,14 @@ std::error_code storage::_flush_file(const std::filesystem::path &aFile) {
     return error;
 }
 
-// Windows offers no flush of a directory to a program that is not an administrator. NTFS journals the names it
-// holds, and a rename asks to be written through (_rename_flushed), which is as much as can be done.
 std::error_code storage::_flush_directory(const std::filesystem::path &) {
     return {};
 }
 
-std::error_code storage::_rename_flushed(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
-    if (!::MoveFileExW(aFrom.c_str(), aTo.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
-        return _last_error();
+std::error_code storage::_rename_replacing(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
+    return _move(aFrom, aTo, 0);
+}
 
-    return {};
+std::error_code storage::_rename_flushed(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
+    return _move(aFrom, aTo, MOVEFILE_WRITE_THROUGH);
 }

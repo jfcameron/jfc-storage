@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #ifndef JFC_STORAGE_EXT_COPY_H
 #define JFC_STORAGE_EXT_COPY_H

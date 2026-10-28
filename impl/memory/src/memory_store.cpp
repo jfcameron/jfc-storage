@@ -1,9 +1,10 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/memory_store.h>
 #include <jfc/storage/store.h>
 
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <set>
@@ -44,8 +45,14 @@ namespace {
         return aPath == aDirectory || aPath.starts_with(std::string(aDirectory) + "/");
     }
 
+    struct _file final {
+        storage::file_data_type contents;
+
+        std::filesystem::file_time_type modified;
+    };
+
     class _memory_store final : public storage::store {
-        std::map<std::string, storage::file_data_type, std::less<>> mFiles;
+        std::map<std::string, _file, std::less<>> mFiles;
 
         std::set<std::string> mDirectories; 
 
@@ -73,7 +80,15 @@ namespace {
 
             if (found == mFiles.end()) return std::nullopt;
 
-            return found->second;
+            return found->second.contents;
+        }
+
+        [[nodiscard]] std::optional<storage::file_info> _file_info(const std::string &aPath) const override {
+            const auto found = mFiles.find(aPath);
+
+            if (found == mFiles.end()) return std::nullopt;
+
+            return storage::file_info{found->second.contents.size(), found->second.modified};
         }
 
         [[nodiscard]] bool _contains_file(const std::string &aPath) const override {
@@ -103,7 +118,13 @@ namespace {
 
             _make_directories_for("save", aPath);
 
-            mFiles.insert_or_assign(aPath, std::move(contents));
+            mFiles.insert_or_assign(aPath, _file{std::move(contents), std::filesystem::file_time_type::clock::now()});
+        }
+
+        void _make_directory(const std::string &aDirectory) override {
+            _make_directories_for("make the directory", aDirectory);
+
+            mDirectories.insert(aDirectory);
         }
 
         void _remove_file(const std::string &aPath) override {
@@ -134,7 +155,7 @@ namespace {
                 return aNewDirectory + aPath.substr(aOldDirectory.size());
             };
 
-            std::map<std::string, storage::file_data_type> files;
+            std::map<std::string, _file, std::less<>> files;
 
             for (auto each = mFiles.begin(); each != mFiles.end();) {
                 if (_is_in(each->first, aOldDirectory)) {

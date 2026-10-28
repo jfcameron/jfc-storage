@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #ifndef JFC_STORAGE_STORE_H
 #define JFC_STORAGE_STORE_H
@@ -19,6 +19,9 @@ namespace jfc::storage {
         /// \brief whether there is a file at aPath
         [[nodiscard]] bool contains_file(std::string_view aPath) const;
 
+        /// \brief the size of the file at aPath and when it was written, or nothing if there is no file there
+        [[nodiscard]] std::optional<storage::file_info> file_info(std::string_view aPath) const;
+
         /// \brief whether there is a directory at aDirectory
         [[nodiscard]] bool contains_directory(std::string_view aDirectory) const;
 
@@ -30,6 +33,9 @@ namespace jfc::storage {
 
         /// \brief write a file, replacing any already there
         void save_file(std::string_view aPath, file_view_type aData);
+
+        /// \brief make a directory, and those it is in; nothing if it is already there
+        void make_directory(std::string_view aDirectory);
 
         /// \brief remove a file
         void remove_file(std::string_view aPath);
@@ -56,6 +62,8 @@ namespace jfc::storage {
 
         [[nodiscard]] virtual bool _contains_file(const std::string &aPath) const;
 
+        [[nodiscard]] virtual std::optional<storage::file_info> _file_info(const std::string &aPath) const = 0;
+
         [[nodiscard]] virtual bool _contains_directory(const std::string &aDirectory) const;
 
         [[nodiscard]] virtual std::vector<std::string> _files(const std::string &aDirectory) const = 0;
@@ -63,6 +71,8 @@ namespace jfc::storage {
         [[nodiscard]] virtual std::vector<std::string> _directories(const std::string &aDirectory) const = 0;
 
         virtual void _save_file(const std::string &aPath, file_view_type aData) = 0;
+
+        virtual void _make_directory(const std::string &aDirectory) = 0;
 
         virtual void _remove_file(const std::string &aPath) = 0;
 

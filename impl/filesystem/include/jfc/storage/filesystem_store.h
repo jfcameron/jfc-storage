@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #ifndef JFC_STORAGE_FILESYSTEM_STORE_H
 #define JFC_STORAGE_FILESYSTEM_STORE_H
@@ -12,7 +12,7 @@ namespace jfc::storage {
         /// \brief let only this user read or write the store's directories and files
         bool restrict_to_owner = false;
 
-        /// \brief return from each save and move only once it is on the disk
+        /// \brief return from each change only once it is on the disk
         bool flush_to_disk = false;
     };
 

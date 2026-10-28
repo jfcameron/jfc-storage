@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 
@@ -13,5 +13,9 @@ storage::exception::exception(const char *const aWhat)
 {}
 
 storage::path_refused::path_refused(const std::string &aWhat)
+: exception(aWhat)
+{}
+
+storage::not_found::not_found(const std::string &aWhat)
 : exception(aWhat)
 {}

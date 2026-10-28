@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/impl_user_directories.h>

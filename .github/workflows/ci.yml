@@ -1,4 +1,4 @@
-# © Joseph Cameron - All Rights Reserved
+# © Joseph Cameron - MIT License
 
 name: ci
 
@@ -44,7 +44,7 @@ jobs:
             runner: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -62,11 +62,15 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   android:
-    name: android-arm64 (compile only)
+    name: android ${{ matrix.preset }} (compile only)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [android-arm64, android-armv7, android-x86_64, android-x86]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -76,17 +80,51 @@ jobs:
       - name: configure
         run: |
           export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
-          cmake --preset android-arm64
+          cmake --preset ${{ matrix.preset }}
 
       - name: build
-        run: cmake --build --preset android-arm64
+        run: cmake --build --preset ${{ matrix.preset }}
+
+  android-emulator:
+    name: android x86_64 (tests on an emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: install ninja
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: let the emulator use kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: configure
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME"
+          cmake --preset android-x86_64
+
+      - name: build
+        run: cmake --build --preset android-x86_64
+
+      - name: test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          script: ctest --test-dir out/build/android-x86_64 --output-on-failure
 
   ios:
     name: ios (compile only)
     runs-on: macos-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -99,19 +137,47 @@ jobs:
       - name: build
         run: cmake --build --preset ios
 
+  ios-simulator:
+    name: ios simulator arm64 (tests)
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: install ninja
+        run: brew install ninja
+
+      - name: configure
+        run: cmake --preset ios-simulator
+
+      - name: build
+        run: cmake --build --preset ios-simulator
+
+      - name: boot a simulator
+        run: |
+          udid=$(xcrun simctl list devices available --json | python3 -c 'import json, sys; print(next(d["udid"] for runtime, devices in json.load(sys.stdin)["devices"].items() if "iOS" in runtime for d in devices if d["name"].startswith("iPhone")))')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+
+      - name: test
+        run: ctest --test-dir out/build/ios-simulator --output-on-failure
+
   emscripten:
     name: emscripten (wasm)
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
       - name: install ninja
         run: sudo apt-get update && sudo apt-get install -y ninja-build
 
-      - uses: mymindstorm/setup-emsdk@v14
+      - uses: emscripten-core/setup-emsdk@v16
         with:
           version: latest
 
@@ -132,7 +198,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -148,30 +214,58 @@ jobs:
       - name: replay the corpus
         run: ctest --preset linux-clang-fuzz
 
-      - name: fuzz for a minute
+      - name: fuzz the paths for a minute
         run: ./out/build/linux-clang-fuzz/fuzz/jfcstorage_fuzz_path_fuzz -max_total_time=60 fuzz/corpus/paths
+
+      - name: fuzz the filesystem store for a minute
+        run: ./out/build/linux-clang-fuzz/fuzz/jfcstorage_fuzz_filesystem_fuzz -max_total_time=60 fuzz/corpus/paths
 
   docs:
     name: documentation
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
-      - name: install doxygen and ninja
-        run: sudo apt-get update && sudo apt-get install -y doxygen ninja-build
+      - name: install doxygen, graphviz and ninja
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz ninja-build
 
       - name: generate
         run: cmake --preset linux-docs
+
+      - name: upload for github pages
+        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: out/build/linux-docs/docs
+
+  pages:
+    name: publish to github pages
+    needs: docs
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5
 
   clang-tidy:
     name: clang-tidy
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -179,7 +273,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y clang clang-tidy ninja-build
 
       - name: configure
-        run: cmake --preset linux-clang
+        run: cmake --preset linux-clang -DCMAKE_DISABLE_PRECOMPILE_HEADERS=ON
 
       - name: check
         run: run-clang-tidy -quiet -p out/build/linux-clang '/jfc-storage/(src|impl|test)/'

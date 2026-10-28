@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include "test_include.h"
 
@@ -10,6 +10,8 @@
 #include <jfc/storage/memory_store.h>
 #include <jfc/storage/store.h>
 
+#include <chrono>
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -75,6 +77,67 @@ JFC_STORAGE_CONTRACT("a store gives back what was saved") {
 
         REQUIRE(store.files(world) == names{cafe});
         REQUIRE(store.directories("") == names{"a", world});
+    }
+}
+
+namespace {
+    [[nodiscard]] long long ticks_of(const std::filesystem::file_time_type aTime) {
+        return static_cast<long long>(aTime.time_since_epoch().count());
+    }
+}
+
+JFC_STORAGE_CONTRACT("a store says how big a file is and when it was written") {
+    TestType fixture;
+    auto &store = *fixture.store;
+
+    using clock = std::filesystem::file_time_type::clock;
+
+    const auto before = clock::now() - std::chrono::seconds(2);
+
+    store.save_file("a/thing", bytes("12345"));
+
+    const auto after = clock::now() + std::chrono::seconds(2);
+
+    const auto info = store.file_info("a/thing");
+
+    REQUIRE(info);
+    REQUIRE(info->size == 5);
+    REQUIRE(ticks_of(info->modified) >= ticks_of(before));
+    REQUIRE(ticks_of(info->modified) <= ticks_of(after));
+
+    SECTION("the same, every time it is asked") {
+        REQUIRE(ticks_of(store.file_info("a/thing")->modified) == ticks_of(info->modified));
+    }
+
+    SECTION("and a move keeps it") {
+        store.move_file("a/thing", "b/moved");
+
+        REQUIRE(store.file_info("b/moved")->size == 5);
+        REQUIRE(ticks_of(store.file_info("b/moved")->modified) == ticks_of(info->modified));
+
+        store.move_directory("b", "c");
+
+        REQUIRE(ticks_of(store.file_info("c/moved")->modified) == ticks_of(info->modified));
+    }
+
+    SECTION("and a save writes it again") {
+        store.save_file("a/thing", bytes("12"));
+
+        REQUIRE(store.file_info("a/thing")->size == 2);
+        REQUIRE(ticks_of(store.file_info("a/thing")->modified) >= ticks_of(info->modified));
+    }
+
+    SECTION("an empty file is empty") {
+        store.save_file("empty", {});
+
+        REQUIRE(store.file_info("empty")->size == 0);
+    }
+
+    SECTION("and there is nothing to say of what is not a file") {
+        REQUIRE_FALSE(store.file_info("a"));
+        REQUIRE_FALSE(store.file_info("nowhere"));
+        REQUIRE_FALSE(store.file_info("a/thing/beneath"));
+        REQUIRE_THROWS_AS(store.file_info(""), storage::path_refused);
     }
 }
 
@@ -161,6 +224,56 @@ JFC_STORAGE_CONTRACT("a save cannot put a file where a directory is, or under a 
     REQUIRE(text(*store.load_file("a/b")) == "x");
 }
 
+JFC_STORAGE_CONTRACT("a store makes directories") {
+    TestType fixture;
+    auto &store = *fixture.store;
+
+    store.make_directory("saves/slot one");
+
+    REQUIRE(store.contains_directory("saves/slot one"));
+    REQUIRE(store.directories("") == names{"saves"});
+    REQUIRE(store.directories("saves") == names{"slot one"});
+    REQUIRE(store.files("saves/slot one").empty());
+
+    SECTION("and one already there is left as it is") {
+        store.save_file("saves/slot one/player.lua", bytes("x"));
+
+        store.make_directory("saves/slot one");
+        store.make_directory("./saves/");
+
+        REQUIRE(text(*store.load_file("saves/slot one/player.lua")) == "x");
+    }
+
+    SECTION("and the root is always there") {
+        REQUIRE_NOTHROW(store.make_directory(""));
+        REQUIRE(store.directories("") == names{"saves"});
+    }
+
+    SECTION("and a file can be saved in one") {
+        store.save_file("saves/slot one/player.lua", bytes("x"));
+
+        REQUIRE(store.files("saves/slot one") == names{"player.lua"});
+    }
+
+    SECTION("but not where a file is, nor under one") {
+        store.save_file("saves/notes", bytes("x"));
+
+        REQUIRE_THROWS_AS(store.make_directory("saves/notes"), storage::exception);
+        REQUIRE_THROWS_AS(store.make_directory("saves/notes/deeper"), storage::exception);
+
+        try { store.make_directory("saves/notes/deeper"); }
+        catch (const storage::path_refused &) { FAIL("a path every store accepts was refused as a path"); }
+        catch (const storage::exception &) {}
+
+        REQUIRE(text(*store.load_file("saves/notes")) == "x");
+        REQUIRE_FALSE(store.contains_directory("saves/notes"));
+    }
+
+    SECTION("nor outside the store") {
+        REQUIRE_THROWS_AS(store.make_directory("../saves"), storage::path_refused);
+    }
+}
+
 JFC_STORAGE_CONTRACT("a store removes files and directories") {
     TestType fixture;
     auto &store = *fixture.store;
@@ -229,7 +342,7 @@ JFC_STORAGE_CONTRACT("a store moves files") {
     }
 
     SECTION("but not from a file that is not there") {
-        REQUIRE_THROWS_MATCHES(store.move_file("nowhere", "to"), storage::exception,
+        REQUIRE_THROWS_MATCHES(store.move_file("nowhere", "to"), storage::not_found,
             Catch::Matchers::Message("jfc::storage: cannot move \"nowhere\": there is no file there"));
     }
 
@@ -268,7 +381,7 @@ JFC_STORAGE_CONTRACT("a store moves directories") {
     }
 
     SECTION("but not from a directory that is not there") {
-        REQUIRE_THROWS_MATCHES(store.move_directory("nowhere", "somewhere"), storage::exception,
+        REQUIRE_THROWS_MATCHES(store.move_directory("nowhere", "somewhere"), storage::not_found,
             Catch::Matchers::Message("jfc::storage: cannot move the directory \"nowhere\": there is no directory "
                 "there"));
     }
@@ -278,6 +391,10 @@ JFC_STORAGE_CONTRACT("a store moves directories") {
 
         REQUIRE_THROWS_AS(store.move_directory("players/ann", "players/bob"), storage::exception);
         REQUIRE_THROWS_AS(store.move_directory("players/ann", "taken"), storage::exception);
+
+        try { store.move_directory("players/ann", "players/bob"); }
+        catch (const storage::not_found &) { FAIL("something in the way was reported as nothing there"); }
+        catch (const storage::exception &) {}
 
         REQUIRE(text(*store.load_file("players/bob/base.lua")) == "bob");
         REQUIRE(store.contains_directory("players/ann"));
@@ -319,6 +436,17 @@ JFC_STORAGE_CONTRACT("a store copies, through what every store offers") {
         REQUIRE_FALSE(store.contains_directory("worlds/vale/again/again"));
     }
 
+    SECTION("a directory, with the empty directories in it") {
+        store.make_directory("worlds/vale/players");
+        store.make_directory("empty");
+
+        storage::ext::copy_directory(store, "worlds/vale", store, "worlds/vale copy");
+        storage::ext::copy_directory(store, "empty", store, "still empty");
+
+        REQUIRE(store.directories("worlds/vale copy") == names{"deeper", "players"});
+        REQUIRE(store.contains_directory("still empty"));
+    }
+
     SECTION("a directory, into another kind of store") {
         auto other = storage::make_memory_store();
 
@@ -328,8 +456,8 @@ JFC_STORAGE_CONTRACT("a store copies, through what every store offers") {
     }
 
     SECTION("but not what is not there, nor over what is") {
-        REQUIRE_THROWS_AS(storage::ext::copy_file(store, "nowhere", store, "to"), storage::exception);
-        REQUIRE_THROWS_AS(storage::ext::copy_directory(store, "nowhere", store, "to"), storage::exception);
+        REQUIRE_THROWS_AS(storage::ext::copy_file(store, "nowhere", store, "to"), storage::not_found);
+        REQUIRE_THROWS_AS(storage::ext::copy_directory(store, "nowhere", store, "to"), storage::not_found);
         REQUIRE_THROWS_AS(storage::ext::copy_directory(store, "worlds/vale", store, "worlds"), storage::exception);
     }
 }

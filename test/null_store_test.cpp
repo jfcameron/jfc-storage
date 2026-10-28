@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include "test_include.h"
 
@@ -17,6 +17,7 @@ TEST_CASE("a null store keeps nothing", "[jfc::storage::null_store]") {
     store->save_file("worlds/vale/world.lua", bytes("return {}"));
 
     REQUIRE_FALSE(store->load_file("worlds/vale/world.lua"));
+    REQUIRE_FALSE(store->file_info("worlds/vale/world.lua"));
     REQUIRE(store->files("worlds/vale").empty());
     REQUIRE(store->directories("worlds").empty());
     REQUIRE(store->directories("").empty());
@@ -34,4 +35,13 @@ TEST_CASE("a null store has nothing to move, and removes nothing", "[jfc::storag
 
     REQUIRE_NOTHROW(store->remove_file("a"));
     REQUIRE_NOTHROW(store->remove_directory("a"));
+}
+
+TEST_CASE("a null store makes no directories", "[jfc::storage::null_store]") {
+    auto store = storage::make_null_store();
+
+    store->make_directory("saves");
+
+    REQUIRE_FALSE(store->contains_directory("saves"));
+    REQUIRE(store->directories("").empty());
 }

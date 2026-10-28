@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/null_store.h>
 #include <jfc/storage/store.h>
@@ -11,7 +11,13 @@ namespace {
             return std::nullopt;
         }
 
+        [[nodiscard]] std::optional<storage::file_info> _file_info(const std::string &) const override {
+            return std::nullopt;
+        }
+
         void _save_file(const std::string &, storage::file_view_type) override {}
+
+        void _make_directory(const std::string &) override {}
 
         void _remove_file(const std::string &) override {}
 

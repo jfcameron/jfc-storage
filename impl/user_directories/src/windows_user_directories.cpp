@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/impl_user_directories.h>
@@ -17,25 +17,31 @@
 
 using namespace jfc;
 
-std::filesystem::path storage::_user_data_root() {
-    PWSTR folder = nullptr;
+namespace {
+    [[nodiscard]] std::filesystem::path _known_folder(const KNOWNFOLDERID &aFolder, const char *const apName) {
+        PWSTR folder = nullptr;
 
-    const HRESULT result = ::SHGetKnownFolderPath(FOLDERID_RoamingAppData, KF_FLAG_DEFAULT, nullptr, &folder);
+        const HRESULT result = ::SHGetKnownFolderPath(aFolder, KF_FLAG_DEFAULT, nullptr, &folder);
 
-    if (FAILED(result)) {
+        if (FAILED(result)) {
+            ::CoTaskMemFree(folder);
+
+            throw storage::exception("jfc::storage: cannot find the " + std::string(apName) + " folder: HRESULT "
+                + std::to_string(static_cast<unsigned long>(result)));
+        }
+
+        std::filesystem::path path(folder);
+
         ::CoTaskMemFree(folder);
 
-        throw storage::exception("jfc::storage: cannot find the roaming application data folder: HRESULT "
-            + std::to_string(static_cast<unsigned long>(result)));
+        return path;
     }
+}
 
-    std::filesystem::path path(folder);
-
-    ::CoTaskMemFree(folder);
-
-    return path;
+std::filesystem::path storage::_user_data_root() {
+    return _known_folder(FOLDERID_RoamingAppData, "roaming application data");
 }
 
 std::filesystem::path storage::_user_config_root() {
-    return _user_data_root();
+    return _known_folder(FOLDERID_LocalAppData, "local application data");
 }

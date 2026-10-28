@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/impl_user_directories.h>
@@ -20,5 +20,5 @@ std::filesystem::path storage::_user_data_root() {
 }
 
 std::filesystem::path storage::_user_config_root() {
-    return _user_data_root();
+    return _container() / "Library" / "Preferences";
 }

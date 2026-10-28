@@ -1,10 +1,15 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #ifndef JFC_STORAGE_TEST_INCLUDE_H
 #define JFC_STORAGE_TEST_INCLUDE_H
 
+#include <chrono>
 #include <cstddef>
+#include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <random>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,12 +36,30 @@ namespace jfc_storage_test {
         return std::filesystem::path(std::u8string(aText.begin(), aText.end()));
     }
 
+    [[nodiscard]] inline const std::string &run_name() {
+        static const std::string name = [] {
+            auto seed = static_cast<std::uint64_t>(std::chrono::steady_clock::now().time_since_epoch().count());
+
+            try { seed ^= (static_cast<std::uint64_t>(std::random_device()()) << 32); }
+            catch (const std::exception &) {}
+
+            std::ostringstream out;
+
+            out << std::hex << seed;
+
+            return out.str();
+        }();
+
+        return name;
+    }
+
     class scratch_directory final {
         std::filesystem::path mPath;
 
     public:
         explicit scratch_directory(const std::string_view aName)
-        : mPath(std::filesystem::temp_directory_path() / ("jfc-storage-test-" + std::string(aName))) {
+        : mPath(std::filesystem::temp_directory_path()
+            / ("jfc-storage-test-" + run_name() + "-" + std::string(aName))) {
             std::filesystem::remove_all(mPath);
             std::filesystem::create_directories(mPath);
         }

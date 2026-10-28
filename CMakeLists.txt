@@ -1,9 +1,9 @@
-# © Joseph Cameron - All Rights Reserved
+# © Joseph Cameron - MIT License
 
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
 project(jfcstorage
-    VERSION 0.1
+    VERSION 1.0.0
     DESCRIPTION "crossplatform program storage manager"
     LANGUAGES CXX)
 
@@ -14,7 +14,9 @@ include(GNUInstallDirs)
 option(JFCSTORAGE_BUILD_TESTS "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(JFCSTORAGE_BUILD_DOCS "Build documentation" OFF)
 
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME MATCHES "BSD$" OR ANDROID)
+if (ANDROID)
+    set(_jfcstorage_user_directories "")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME MATCHES "BSD$")
     set(_jfcstorage_user_directories "xdg")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(_jfcstorage_user_directories "macos")
@@ -149,7 +151,7 @@ if (EMSCRIPTEN)
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/include>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 
-    target_link_libraries(jfcstorage_persistent PUBLIC jfcstorage_interface)
+    target_link_libraries(jfcstorage_persistent PUBLIC jfcstorage_interface PRIVATE jfcstorage_filesystem)
 
     target_link_options(jfcstorage_persistent PUBLIC "-lidbfs.js")
 

@@ -1,4 +1,4 @@
-# © Joseph Cameron - All Rights Reserved
+# © Joseph Cameron - MIT License
 
 set(_jfcstorage_test_sources
     "${CMAKE_CURRENT_LIST_DIR}/filesystem_store_test.cpp"
@@ -15,6 +15,18 @@ if (_jfcstorage_user_directories)
     endif()
 endif()
 
+set(_jfcstorage_test_threads)
+
+if (NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+
+    set(_jfcstorage_test_threads Threads::Threads)
+endif()
+
+if (EMSCRIPTEN)
+    list(APPEND _jfcstorage_test_sources "${CMAKE_CURRENT_LIST_DIR}/emscripten_persistent_directory_test.cpp")
+endif()
+
 jfc_add_tests(
     C++_STANDARD 20
 
@@ -23,6 +35,7 @@ jfc_add_tests(
 
     LIBRARIES
         jfcstorage
+        ${_jfcstorage_test_threads}
 )
 
 set_property(TARGET ${JFC_TEST_TARGET} PROPERTY CXX_EXTENSIONS OFF)

@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include "test_include.h"
 
@@ -80,6 +80,9 @@ TEST_CASE("a path may wander as long as it stays in the store", "[jfc::storage::
     require_accepted("a..b");
     require_accepted("console.lua");
     require_accepted("com10");
+    require_accepted("com0");
+    require_accepted("com\xC2\xB4");
+    require_accepted("conin");
 }
 
 TEST_CASE("a path means the same on every system", "[jfc::storage::store]") {
@@ -98,7 +101,8 @@ TEST_CASE("a path means the same on every system", "[jfc::storage::store]") {
     require_refused("saves/world.", "a name ends in '.' or ' ', which windows removes");
     require_refused("saves /world", "a name ends in '.' or ' ', which windows removes");
 
-    for (const std::string each : {"con", "CON", "prn", "aux", "nul", "Nul.txt", "com1", "lpt9.tar.gz"})
+    for (const std::string each : {"con", "CON", "prn", "aux", "nul", "Nul.txt", "com1", "lpt9.tar.gz", "conin$",
+        "CONOUT$.log", "com\xC2\xB9", "LPT\xC2\xB3.txt"})
         require_refused("saves/" + each, "a name is one windows reserves for a device");
 }
 

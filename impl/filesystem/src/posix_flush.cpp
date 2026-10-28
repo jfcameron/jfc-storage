@@ -1,4 +1,4 @@
-// © Joseph Cameron - All Rights Reserved
+// © Joseph Cameron - MIT License
 
 #include <jfc/storage/impl_flush.h>
 
@@ -44,12 +44,18 @@ std::error_code storage::_flush_directory(const std::filesystem::path &aDirector
     return error;
 }
 
-std::error_code storage::_rename_flushed(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
+std::error_code storage::_rename_replacing(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
     std::error_code error;
 
     std::filesystem::rename(aFrom, aTo, error);
 
-    if (error) return error;
+    return error;
+}
+
+std::error_code storage::_rename_flushed(const std::filesystem::path &aFrom, const std::filesystem::path &aTo) {
+    if (const auto error = _rename_replacing(aFrom, aTo)) return error;
+
+    std::error_code error;
 
     if (aFrom.parent_path() != aTo.parent_path()) {
         error = _flush_directory(aFrom.parent_path());
