@@ -1,13 +1,12 @@
 // © Joseph Cameron - MIT License
 
+#include "conformance.h"
 #include "test_include.h"
 
 #include <jfc/catch.hpp>
 
 #include <jfc/storage/exception.h>
 #include <jfc/storage/ext/copy.h>
-#include <jfc/storage/filesystem_store.h>
-#include <jfc/storage/memory_store.h>
 #include <jfc/storage/store.h>
 
 #include <chrono>
@@ -17,33 +16,20 @@
 
 using namespace jfc;
 using namespace jfc_storage_test;
+using jfc::storage::conformance::implementation;
+using jfc::storage::conformance::make_store;
 
 namespace {
-    struct in_memory final {
-        storage::store_ptr_type store = storage::make_memory_store();
-    };
-
-    struct on_disk final {
-        scratch_directory root{"contract"};
-
-        storage::store_ptr_type store = storage::make_filesystem_store(root.path());
-    };
-
-    struct on_disk_flushed final {
-        scratch_directory root{"contract_flushed"};
-
-        storage::store_ptr_type store = storage::make_filesystem_store(root.path(), {.flush_to_disk = true});
-    };
-
     using names = std::vector<std::string>;
 }
 
-#define JFC_STORAGE_CONTRACT(aName) \
-    TEMPLATE_TEST_CASE(aName, "[jfc::storage::store][contract]", in_memory, on_disk, on_disk_flushed)
+#define JFC_STORAGE_CONFORMANCE(aName) TEST_CASE(aName, "[jfc::storage::store][conformance]")
 
-JFC_STORAGE_CONTRACT("a store gives back what was saved") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store gives back what was saved") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("a/b/thing.json", bytes(R"({"token":"secret"})"));
 
@@ -86,9 +72,11 @@ namespace {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store says how big a file is and when it was written") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store says how big a file is and when it was written") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     using clock = std::filesystem::file_time_type::clock;
 
@@ -141,9 +129,11 @@ JFC_STORAGE_CONTRACT("a store says how big a file is and when it was written") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store has nothing where nothing was saved") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store has nothing where nothing was saved") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("a/thing", bytes("x"));
 
@@ -170,9 +160,11 @@ JFC_STORAGE_CONTRACT("a store has nothing where nothing was saved") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store says what is in a directory") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store says what is in a directory") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     const std::vector<std::byte> something{std::byte{7}};
 
@@ -208,9 +200,11 @@ JFC_STORAGE_CONTRACT("a store says what is in a directory") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a save cannot put a file where a directory is, or under a file") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a save cannot put a file where a directory is, or under a file") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("a/b", bytes("x"));
 
@@ -224,9 +218,11 @@ JFC_STORAGE_CONTRACT("a save cannot put a file where a directory is, or under a 
     REQUIRE(text(*store.load_file("a/b")) == "x");
 }
 
-JFC_STORAGE_CONTRACT("a store makes directories") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store makes directories") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.make_directory("saves/slot one");
 
@@ -274,9 +270,11 @@ JFC_STORAGE_CONTRACT("a store makes directories") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store removes files and directories") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store removes files and directories") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("worlds/vale/world.lua", bytes("x"));
     store.save_file("worlds/vale/deeper/0.0.0.chunk", bytes("x"));
@@ -313,9 +311,11 @@ JFC_STORAGE_CONTRACT("a store removes files and directories") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store moves files") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store moves files") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("from", bytes("moved"));
 
@@ -356,9 +356,11 @@ JFC_STORAGE_CONTRACT("a store moves files") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store moves directories") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store moves directories") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("players/ann/base.lua", bytes("ann"));
     store.save_file("players/ann/1/base.lua", bytes("first"));
@@ -408,9 +410,11 @@ JFC_STORAGE_CONTRACT("a store moves directories") {
     }
 }
 
-JFC_STORAGE_CONTRACT("a store copies, through what every store offers") {
-    TestType fixture;
-    auto &store = *fixture.store;
+JFC_STORAGE_CONFORMANCE("a store copies, through what every store offers") {
+    CAPTURE(implementation());
+
+    const auto pStore = make_store();
+    auto &store = *pStore;
 
     store.save_file("worlds/vale/world.lua", bytes("vale"));
     store.save_file("worlds/vale/deeper/0.0.0.chunk", bytes("chunk"));
@@ -448,7 +452,7 @@ JFC_STORAGE_CONTRACT("a store copies, through what every store offers") {
     }
 
     SECTION("a directory, into another kind of store") {
-        auto other = storage::make_memory_store();
+        auto other = make_store();
 
         storage::ext::copy_directory(store, "worlds", *other, "");
 

@@ -1,41 +1,16 @@
 # © Joseph Cameron - MIT License
 
-set(_jfcstorage_test_sources
-    "${CMAKE_CURRENT_LIST_DIR}/filesystem_store_test.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/null_store_test.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/store_contract_test.cpp"
-    "${CMAKE_CURRENT_LIST_DIR}/store_paths_test.cpp")
-
-if (_jfcstorage_user_directories)
-    list(APPEND _jfcstorage_test_sources "${CMAKE_CURRENT_LIST_DIR}/user_directories_test.cpp")
-
-    if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/${_jfcstorage_user_directories}_user_directories_test.cpp")
-        list(APPEND _jfcstorage_test_sources
-            "${CMAKE_CURRENT_LIST_DIR}/${_jfcstorage_user_directories}_user_directories_test.cpp")
-    endif()
-endif()
-
-set(_jfcstorage_test_threads)
-
-if (NOT EMSCRIPTEN)
-    find_package(Threads REQUIRED)
-
-    set(_jfcstorage_test_threads Threads::Threads)
-endif()
-
-if (EMSCRIPTEN)
-    list(APPEND _jfcstorage_test_sources "${CMAKE_CURRENT_LIST_DIR}/emscripten_persistent_directory_test.cpp")
-endif()
-
 jfc_add_tests(
     C++_STANDARD 20
 
     TEST_SOURCE_FILES
-        ${_jfcstorage_test_sources}
+        "${CMAKE_CURRENT_LIST_DIR}/memory_conformance.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/null_store_test.cpp"
+        "${CMAKE_CURRENT_LIST_DIR}/store_paths_test.cpp"
 
     LIBRARIES
         jfcstorage
-        ${_jfcstorage_test_threads}
+        jfcstorage_conformance
 )
 
 set_property(TARGET ${JFC_TEST_TARGET} PROPERTY CXX_EXTENSIONS OFF)

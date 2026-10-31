@@ -217,9 +217,6 @@ jobs:
       - name: fuzz the paths for a minute
         run: ./out/build/linux-clang-fuzz/fuzz/jfcstorage_fuzz_path_fuzz -max_total_time=60 fuzz/corpus/paths
 
-      - name: fuzz the filesystem store for a minute
-        run: ./out/build/linux-clang-fuzz/fuzz/jfcstorage_fuzz_filesystem_fuzz -max_total_time=60 fuzz/corpus/paths
-
   docs:
     name: documentation
     runs-on: ubuntu-latest

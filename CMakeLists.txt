@@ -2,9 +2,13 @@
 
 cmake_minimum_required(VERSION 3.21 FATAL_ERROR)
 
+if (TARGET jfcstorage)
+    return()
+endif()
+
 project(jfcstorage
-    VERSION 1.0.0
-    DESCRIPTION "crossplatform program storage manager"
+    VERSION 2.0.0
+    DESCRIPTION "a store interface for a program's files, kept in memory or nowhere"
     LANGUAGES CXX)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/jfc-cmake/jfclib.cmake")
@@ -13,22 +17,6 @@ include(GNUInstallDirs)
 
 option(JFCSTORAGE_BUILD_TESTS "Build unit tests" ${PROJECT_IS_TOP_LEVEL})
 option(JFCSTORAGE_BUILD_DOCS "Build documentation" OFF)
-
-if (ANDROID)
-    set(_jfcstorage_user_directories "")
-elseif (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME MATCHES "BSD$")
-    set(_jfcstorage_user_directories "xdg")
-elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(_jfcstorage_user_directories "macos")
-elseif (CMAKE_SYSTEM_NAME STREQUAL "iOS")
-    set(_jfcstorage_user_directories "ios")
-elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(_jfcstorage_user_directories "windows")
-elseif (EMSCRIPTEN)
-    set(_jfcstorage_user_directories "emscripten")
-else()
-    set(_jfcstorage_user_directories "")
-endif()
 
 set(_jfcstorage_strict_flags)
 
@@ -95,68 +83,12 @@ target_include_directories(jfcstorage_memory PUBLIC
 
 target_link_libraries(jfcstorage_memory PUBLIC jfcstorage_interface)
 
-if (WIN32)
-    set(_jfcstorage_flush "windows")
-else()
-    set(_jfcstorage_flush "posix")
-endif()
-
-_jfcstorage_library(jfcstorage_filesystem storage_filesystem
-    "${CMAKE_CURRENT_SOURCE_DIR}/impl/filesystem/src/filesystem_store.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/impl/filesystem/src/${_jfcstorage_flush}_flush.cpp")
-
-target_include_directories(jfcstorage_filesystem
-    PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/impl/filesystem/include>"
-        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-    PRIVATE
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/filesystem/src/include")
-
-target_link_libraries(jfcstorage_filesystem PUBLIC jfcstorage_interface)
-
 _jfcstorage_library(jfcstorage_ext storage_ext
     "${CMAKE_CURRENT_SOURCE_DIR}/src/ext/copy.cpp")
 
 target_link_libraries(jfcstorage_ext PUBLIC jfcstorage_interface)
 
-set(_jfcstorage_targets
-    jfcstorage_interface jfcstorage_ext jfcstorage_null jfcstorage_memory jfcstorage_filesystem)
-
-if (_jfcstorage_user_directories)
-    _jfcstorage_library(jfcstorage_user_directories storage_user_directories
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/src/user_directories.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/src/${_jfcstorage_user_directories}_user_directories.cpp")
-
-    target_include_directories(jfcstorage_user_directories
-        PUBLIC
-            "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/include>"
-            "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-        PRIVATE
-            "${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/src/include")
-
-    target_link_libraries(jfcstorage_user_directories PUBLIC jfcstorage_interface)
-
-    if (_jfcstorage_user_directories STREQUAL "windows")
-        target_link_libraries(jfcstorage_user_directories PRIVATE shell32 ole32)
-    endif()
-
-    list(APPEND _jfcstorage_targets jfcstorage_user_directories)
-endif()
-
-if (EMSCRIPTEN)
-    _jfcstorage_library(jfcstorage_persistent storage_persistent
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/src/persistent_directory.cpp")
-
-    target_include_directories(jfcstorage_persistent PUBLIC
-        "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/include>"
-        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
-
-    target_link_libraries(jfcstorage_persistent PUBLIC jfcstorage_interface PRIVATE jfcstorage_filesystem)
-
-    target_link_options(jfcstorage_persistent PUBLIC "-lidbfs.js")
-
-    list(APPEND _jfcstorage_targets jfcstorage_persistent)
-endif()
+set(_jfcstorage_targets jfcstorage_interface jfcstorage_ext jfcstorage_null jfcstorage_memory)
 
 add_library(jfcstorage INTERFACE)
 
@@ -168,6 +100,15 @@ target_link_libraries(jfcstorage INTERFACE ${_jfcstorage_targets})
 
 list(APPEND _jfcstorage_targets jfcstorage)
 
+add_library(jfcstorage_conformance INTERFACE)
+
+target_sources(jfcstorage_conformance INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}/test/conformance/store_conformance.cpp")
+
+target_include_directories(jfcstorage_conformance INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/test/conformance")
+
+target_link_libraries(jfcstorage_conformance INTERFACE jfcstorage_interface jfcstorage_ext)
+
 include(CMakePackageConfigHelpers)
 
 install(TARGETS ${_jfcstorage_targets}
@@ -177,18 +118,7 @@ install(TARGETS ${_jfcstorage_targets}
 set(_jfcstorage_public_include_directories
     "${CMAKE_CURRENT_SOURCE_DIR}/include/"
     "${CMAKE_CURRENT_SOURCE_DIR}/impl/null/include/"
-    "${CMAKE_CURRENT_SOURCE_DIR}/impl/memory/include/"
-    "${CMAKE_CURRENT_SOURCE_DIR}/impl/filesystem/include/")
-
-if (_jfcstorage_user_directories)
-    list(APPEND _jfcstorage_public_include_directories
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/user_directories/include/")
-endif()
-
-if (EMSCRIPTEN)
-    list(APPEND _jfcstorage_public_include_directories
-        "${CMAKE_CURRENT_SOURCE_DIR}/impl/emscripten/include/")
-endif()
+    "${CMAKE_CURRENT_SOURCE_DIR}/impl/memory/include/")
 
 install(DIRECTORY ${_jfcstorage_public_include_directories}
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
@@ -227,9 +157,7 @@ if (JFCSTORAGE_BUILD_DOCS)
 
         INCLUDE_DIRECTORIES
             include/
-            impl/filesystem/include/
             impl/memory/include/
             impl/null/include/
-            impl/user_directories/include/
     )
 endif()
