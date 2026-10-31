@@ -221,5 +221,15 @@ if (JFC_BUILD_FUZZERS)
 endif()
 
 if (JFCSTORAGE_BUILD_DOCS)
-    add_subdirectory(docs)
+    jfc_generate_documentation_doxygen(
+        README_PATH      README.md
+        OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/docs
+
+        INCLUDE_DIRECTORIES
+            include/
+            impl/filesystem/include/
+            impl/memory/include/
+            impl/null/include/
+            impl/user_directories/include/
+    )
 endif()
